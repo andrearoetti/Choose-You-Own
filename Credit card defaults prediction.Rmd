@@ -18,14 +18,17 @@ knitr::opts_chunk$set(echo = TRUE)
 # Introduction
 
 In this project, using a dataset containing six months information, we want to create a model that predicts credit card defaults. From a risk management perspective, an accurate prediction and assessment of the credit risk is of relevant importance for the bank issuing the credit card.
-The dataset we are going to use can be downloaded at the following url:
-"https://archive.ics.uci.edu/ml/machine-learning-databases/00350/default%20of%20credit%20card%20clients.xls".
-We have downloaded and manually saved a version of the *.xlsx* file in the "data" subfolder you can find within the github repo link we have provided together with the three files or at the following ulr:
-"https://github.com/andrearoetti/Choose-Your-Own/tree/master/data".
+The dataset we are going to use can be downloaded at the following url: \newline
+\newline
+"https://archive.ics.uci.edu/ml/machine-learning-databases/00350/default%20of%20credit%20card%20clients.xls".\newline
+\newline
+We have downloaded and manually saved a version of the *.xlsx* file in the "data" subfolder you can find within the github repo link we have provided together with the three files or at the following ulr: \newline
+\newline
+"https://github.com/andrearoetti/Choose-Your-Own/tree/master/data". \newline
+\newline
 Before getting started, we load the necessary packages for our work, after installing them in case they are not installed yet.
-
+\newline
 ```{r installing, message = FALSE, warning = FALSE}
-
 if (!require(tidyverse)) install.packages('tidyverse')
 if (!require(lattice)) install.packages('lattice')
 if (!require(caret)) install.packages('caret')
@@ -37,12 +40,17 @@ library(readxl)
 ```
 
 We therefore use here below a relative path in order to read the excel file in R: for the sake of simplicity, we will simply call the dataset **credit_card**.
-
+\newline
 ```{r read the file, message = FALSE}
-
 credit_card <- read_xlsx("data/default of credit card clients.xlsx")
 ```
 # Data cleaning and exploratory analysis
 
+We first take a look of the first six rows to get a flavour of how the dataset is made.
+\newline
+```{r head}
+head(credit_card)
+```
 
+We immediately notice that 
 
