@@ -44,7 +44,7 @@ We therefore use here below a relative path in order to read the excel file in R
 ```{r read the file, message = FALSE}
 credit_card <- read_xlsx("data/default of credit card clients.xlsx")
 ```
-# Data cleaning and exploratory analysis
+# Data cleaning
 
 We first take a look of the first six rows to get a flavour of how the dataset is made.
 \newline
@@ -52,5 +52,149 @@ We first take a look of the first six rows to get a flavour of how the dataset i
 head(credit_card)
 ```
 
-We immediately notice that 
+We immediately notice that the first column may be a simple counter of the lines if every ID is different from each other: we confirm this with the code below.
+\newline
+```{r first column}
+nrow(credit_card)
+n_distinct(credit_card$...1)
+```
 
+This does not add any value to our data: we are going to delete the first column. In the meanwhile, we acknowledge that our dataset has 30.000 records. Moreover, we also notice that the first line is actually a description of each column: we will save this line under another object called *col_description* and delete from our dataset as well.
+\newline
+```{r cleaning}
+credit_card <- credit_card[,-1]
+col_description <- credit_card[1,]
+credit_card <- credit_card[-1,]
+```
+
+We now take the *col_description*, which is a tibble, and we transpose it so that it is easier to be shown and read.
+
+```{r description}
+class(col_description)
+t(col_description)
+```
+We now take the oppoortunity to describe the type of information we have in our dataset. First of all, since our data is taken from Taiwan, every money amount is in New Taiwan Dollars, also abbreviated as NT Dollars or TWD. On average in the last year, the TWD has exchanged against USD with a rate of about 0.032, or about 30 TWD for 1 USD. \newline
+
+## Columns description
+
+* The first column (**X1** or "LIMIT_BAL") represent the maximum limit of each credit card. 
+* The second column (**X2** or "SEX") represents the gender: 1 = male and 2 = female.
+* The Third colimn (**X3** or "EDUCATION") represents the education level: 1 = graduate school, 2 = university, 3 = high school, 4 = others, 5, 6 = uknown.
+* The fourth column (**X4** or "MARRIAGE") represents the marital status: 1 = married, 2 = single, 3 = others.
+* The fifth column (**X5** or "AGE") represents the age in years.
+* From the column **X6** ("PAY_0") to the column **X11** ("PAY_6") we have repayment status from September 2005 back to April 2005 respectively ("PAY_0" is September, "PAY_2" is August, all the way to "PAY_6" that is April): -1 = pay duly, 1 = payment delay for one month, 2 = payment delay for two months, ... 8 = payment delay for 8 months, 9 = payment delay for 9 months or more.
+* From the column **X12** ("BILL_AMT1") to the column **X17** ("BILL_AMT6"), with the same logic we have the amount of bill statements from September 2005, in "BILL_AMT1", all the way to April 2005 ("BILL_AMT6").
+* From the column **X18** ("PAY_AMT1") to the column **X23** ("PAY_AMT6"), again with the same logic, we have the amounts of previous payment from September 2005, in "PAY_AMT1",all the way to April 2005 ("PAY_AMT6").
+* Fianlly, in the last column (**Y** or 'default payment next month') we have the outcome 1 in case of default, 0 otherwise.
+
+## Data tidying and partitioning
+
+Based on columns definition, we first change the columns class to factors (for sex, education, marriage and the outcome 'default payment next month') or numbers (all the remaining).
+\newline
+```{r numeric/factor}
+credit_card[,-c(2,3,4,24)] <- as_tibble(sapply(credit_card[,-c(2,3,4,24)], as.numeric))
+credit_card$X2 <- as.factor(credit_card$X2)
+credit_card$X3 <- as.factor(credit_card$X3)
+credit_card$X4 <- as.factor(credit_card$X4)
+credit_card$Y <- as.factor(credit_card$Y)
+```
+
+The ultimate goal of this project is to predict, on an uknown dataset, the outcome of column Y given all the Xs. To do this, we split our dataset into two parts: one, called *historic* will be treated as historic series of data at our disposition, where we will do our data analysis and build our model. The second one, called *validation*, will be treated as unknown and only used to evaluate the performance of our final model. The proportion choosen is 80-20% in order to have enough data to build and train our model but also a consistent dataset for evaluating it. \newline
+To permit the replica of our work, we set the seed before creating the index.
+\newline
+```{r historic/validation, message = FALSE, warning = FALSE}
+set.seed(1, sample.kind = "Rounding")
+test_index <- createDataPartition(y = credit_card$Y, times = 1,p = 0.2, list = FALSE)
+historic <- credit_card[-test_index,]
+validation <- credit_card[test_index,]
+```
+
+# Exploratory data analysis
+
+We are now ready to start our data analysis on the *historic* dataset as if it were our historical series of records to use for our model. First, here below a summary of the statistics.
+\newline
+```{r summary}
+summary(historic)
+```
+We notice that our population is aged, on average, almost 35.5, with a range that goes from 21 to 75. 50% of the cases are between 28 and 41 years old. Moreover, the average credit card limit is TWD 167.286 (around USD 5.500), with a range between TWD 10.000 (something more than USD 300) and 800.000 (more than USD 25.500). Among other statistics, it would be interesting understanding the rate of credit card defaults, the proportion male/female and the proportion of married individuals.
+\newline
+```{r averages}
+mean(historic$Y == "1")
+mean(historic$X2 == "1")
+mean(historic$X4 == "1")
+```
+We understand that the 22.1% of the cases has a credit card default payment in the next month, the 39.6% is male and the 45.3% of individuals is married. More than that, before focusing on previous months data, it would be interesting understanding whether and how there is a correlation between the defaults and the other factors as gender, education level, marriage status, age or credit card limit.
+
+## Gender
+
+We first check how the default payments are divided by gender and we do it with the following barplot.
+\newline
+```{r gender plot, message = FALSE, warning = FALSE, echo = FALSE}
+historic %>% group_by(X2,Y) %>% summarize(n = n()) %>% ggplot() + geom_col(aes(X2,n, fill = Y))
+```
+It looks like the default payments for male (X2 = 1) are, on percentage, slighlty higher than for females (X2 = 2), despite the fact that in absolute numbers they are a bit less. The below table confirms our suspect.
+
+```{r rate by gender, message = FALSE, warning = FALSE}
+historic %>% group_by(X2) %>% summarize(rate = mean(Y == "1"), n = n())
+```
+
+## Education level
+
+We now make the same exercise on education level, here is the barplot.
+\newline
+```{r educational level plot, message = FALSE, warning = FALSE, echo = FALSE}
+historic %>% group_by(X3,Y) %>% summarize(n = n()) %>% ggplot() + geom_col(aes(X3,n, fill = Y))
+```
+
+This last plot is more difficult to read as the number of individuals in the different levels varies a lot. We therefore make a summary table of the default rates by education.
+\newline
+```{r rate by educational level, message = FALSE, warning = FALSE}
+historic %>% group_by(X3) %>% summarize(rate = mean(Y == "1"), n = n())
+```
+From this table it appears more clearly that actually, among the three main categories (graduate school = 1, university = 2, high school = 3), the education level has an impact on defaults rate: the higher the degree, the lower the rate. No relevant paths can be deducted from the other categories, since the number of individuals is not significant.
+
+## Marital status
+
+As done previously, we try to understand if also the marriage status may impact the default payments rate.
+
+```{r marriage status plot, message = FALSE, warning = FALSE, echo = FALSE}
+historic %>% group_by(X4,Y) %>% summarize(n = n()) %>% ggplot() + geom_col(aes(X4,n, fill = Y))
+```
+Similarily to the gender situation, it appears that in case an individual is married (X4 = 1), the default rate is slightly higher than in the case she/he is single (X4 = 2), despite the fact in our dataset we have overall more cases of defaults pertaining to singles. We confirm our guess with the table below.
+\newline
+```{r rate by marriage status, message = FALSE, warning = FALSE}
+historic %>% group_by(X4) %>% summarize(rate = mean(Y == "1"), n = n())
+```
+Other marriage status do not appear to be statistically relevant due to the low number of cases.
+
+## Age
+
+To understand whether age has an impact on default rate or not we check if the age distribution functions for the two possible outcomes we want to predict (Y = 1 or 0) have shapes centered at different ages or follow different paths. We make use of a smooth line since age is not a factor as gender, marital status or education level. Here below the graph.
+\newline
+```{r Age plot, message = FALSE, warning = FALSE, echo = FALSE}
+historic %>% group_by(X5,Y) %>% summarize(n = n()) %>% ggplot(aes(X5, n, color = Y)) + geom_smooth(span = 0.4) + geom_point()
+```
+
+From this plot it looks like the two curves follow a similar proportional path with no sensible evidences of age disparity. We summarise in the table below the average age for default and non-default cases.
+\newline
+```{r rate by age, message = FALSE, warning = FALSE}
+historic %>% group_by(Y) %>% summarize(rate = mean(X5), n = n())
+```
+
+In our kind of Bayesan analysis it apperas that, given the default or not, does not really help in understanding the age of the individual on average, like saying that a youger age does not mean a higher risk and vice-versa.
+
+## Credit card limit
+
+Our last check, in this chapter, is on the relation between credit card limit and default payments and here we go with the plot. We have used, as for the age, a smooth line, with the x-axis (card limit) rescaled through *log2* transformation to see top peaks less sparse.
+\newline
+```{r card limit plot, message = FALSE, warning = FALSE, echo = FALSE}
+historic %>% group_by(X1,Y) %>% summarize(n = n()) %>% ggplot(aes(X1, n, color = Y)) + geom_smooth(span = 0.3) + geom_point() + scale_x_continuous(trans='log2')
+```
+This time it looks like for smaller limits we have higher percentages of defaults. We try to confirm this with an ex-post check on average credit card limits for defaults and non-defaults cases.
+\newline
+```{r rate by limit, message = FALSE, warning = FALSE}
+historic %>% group_by(Y) %>% summarize(rate = mean(X1), n = n())
+```
+The table confirms our intuition, since the average limit for default cases is lower. This indicates that, perhaps, who asks for an increase in her/his limit, has actually a even higher economic power than what conceded.
+
+# Model
