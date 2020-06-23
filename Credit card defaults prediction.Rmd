@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-In this project, using a dataset containing six months information, we want to create a model that predicts credit card defaults. From a risk management perspective, an accurate prediction and assessment of the credit risk is of relevant importance for the bank issuing the credit card.
+In this project, using a dataset containing six months information, we want to create a model that predicts credit card default payments. From a risk management perspective, an accurate prediction and assessment of the credit risk is of relevant importance for the bank issuing the credit card.
 The dataset we are going to use can be downloaded at the following url: \newline
 \newline
 "https://archive.ics.uci.edu/ml/machine-learning-databases/00350/default%20of%20credit%20card%20clients.xls".\newline
@@ -33,10 +33,12 @@ if (!require(tidyverse)) install.packages('tidyverse')
 if (!require(lattice)) install.packages('lattice')
 if (!require(caret)) install.packages('caret')
 if (!require(readxl)) install.packages('readxl')
+if (!require(gam)) install.packages('gam')
 library(tidyverse)
 library(lattice)
 library(caret)
 library(readxl)
+library(gam)
 ```
 
 We therefore use here below a relative path in order to read the excel file in R: for the sake of simplicity, we will simply call the dataset **credit_card**.
@@ -59,7 +61,7 @@ nrow(credit_card)
 n_distinct(credit_card$...1)
 ```
 
-This does not add any value to our data: we are going to delete the first column. In the meanwhile, we acknowledge that our dataset has 30.000 records. Moreover, we also notice that the first line is actually a description of each column: we will save this line under another object called *col_description* and delete from our dataset as well.
+This does not add any value to our data: we are going to delete the first column. In the meanwhile, we acknowledge that our dataset has 30.000 records. Moreover, we also notice that the first line is actually a description of each column: we will save this line under another object called *col_description* and delete it from our dataset as well.
 \newline
 ```{r cleaning}
 credit_card <- credit_card[,-1]
@@ -84,7 +86,7 @@ We now take the opportunity to describe the type of information we have in our d
 * The fifth column (**X5** or "AGE") represents the age in years.
 * From the column **X6** ("PAY_0") to the column **X11** ("PAY_6") we have repayment status from September 2005 back to April 2005 respectively ("PAY_0" is September, "PAY_2" is August, all the way to "PAY_6" that is April): -1 = pay duly, 1 = payment delay for one month, 2 = payment delay for two months, ... 8 = payment delay for 8 months, 9 = payment delay for 9 months or more.
 * From the column **X12** ("BILL_AMT1") to the column **X17** ("BILL_AMT6"), with the same logic we have the amount of bill statements from September 2005, in "BILL_AMT1", all the way to April 2005 ("BILL_AMT6").
-* From the column **X18** ("PAY_AMT1") to the column **X23** ("PAY_AMT6"), again with the same logic, we have the amounts of previous payment from September 2005, in "PAY_AMT1",all the way to April 2005 ("PAY_AMT6").
+* From the column **X18** ("PAY_AMT1") to the column **X23** ("PAY_AMT6"), again with the same logic, we have the amounts of previous payment from September 2005, in "PAY_AMT1", all the way to April 2005 ("PAY_AMT6").
 * Finally, in the last column (**Y** or 'default payment next month') we have the outcome 1 in case of default, 0 otherwise.
 
 ## Data tidying and partitioning
@@ -175,7 +177,7 @@ To understand whether age has an impact on default rate or not we check if the a
 historic %>% group_by(X5,Y) %>% summarize(n = n()) %>% ggplot(aes(X5, n, color = Y)) + geom_smooth(span = 0.4) + geom_point()
 ```
 
-From this plot it looks like the two curves follow a similar proportional path with no sensible evidences of age disparity. We summarise in the table below the average age for default and non-default cases.
+From this plot it looks like the two curves follow a similar proportional path with no sensible evidences of age disparity (beside a different number of cases by age, of course). We summarise in the table below the average age for default and non-default cases.
 \newline
 ```{r rate by age, message = FALSE, warning = FALSE}
 historic %>% group_by(Y) %>% summarize(rate = mean(X5), n = n())
@@ -199,17 +201,17 @@ The table confirms our intuition, since the average limit for default cases is l
 
 # Model
 
-We are now ready to build our model. We will exploit easiness of use of the caret package in order to apply different models to our predictors and then we will choose the best performing ones. Since every model will calculate its accuracy by performing cross-validation on bootstrap samples, we do not need to further split our historical dataset into train and test sets. We will tune, instead, the chosen models in case they had tuning parameters. \newline
-Since our categorical outcome (0 or 1 for credit card default, column Y) is unbalanced and contains a majority of non-defaults (Y = 0), the benchmark result required to be overperformed is the accuracy rate given by all predictions equal to zero. We keep track of it in a table.
+We are now ready to build our model. We will exploit the easiness of use of the 'caret' package in order to apply different models to our predictors and then we will choose the best performing ones. Since every model will calculate its accuracy by performing cross-validation on bootstrap samples, we do not need to further split our historical dataset into train and test sets. We will tune, instead, the chosen models in case they have tuning parameters. \newline
+Since our categorical outcome (0 or 1 for credit card default payment, column Y) is unbalanced and contains a majority of non-defaults (Y = 0), the benchmark result required to be overperformed is the accuracy rate given by all predictions equal to zero.
 \newline
 ```{r benchmark}
 zeros <- sample(0, nrow(historic), replace = TRUE, prob = 1)
 benchmark <- mean(zeros == historic$Y)
 benchmark
 ```
-In this sense, the 'Kappa' parameter of every model will be fundamental, being a parameter normalized on the expected accuracy, namely the random chance. It measure how many prediction we are getting correct on top of randomness: of course, the higher, the better. \newline
+In this sense, the 'Kappa' parameter of every model will be fundamental, being a parameter normalized on the expected accuracy, namely the random chance. It measure how many prediction we are getting correct on top of randomness: of course, the higher the better. \newline
 In the previous chapter we have analysed some possible and curious relations between personal information such as gender or marital status and the probability of default payments. From now on, to make it simple, we will call the information we have previously decided to include in our model (gender, education level, marital status and also credit card limit, with the only exclusion of the age) personal information. \newline
-We notice that the remaining columns of the datasets that we have not analysed yet, may be clustered into three groups: monthly repayment status (from X6 to X11), monthly bills (from X12 to X17) and monthly payments (from X18 to X23). To summarise the information contained there, and also to reduce the number of predictors (hopefully, in a meaningful way), we add three columns to our table **historic**, called *sum_delays*, *billed_tot* and *paid_tot* calculated, respectively, as the sum of the columns from X6 to X11, from X12 to X17 and from X18 to X23.
+We notice that the remaining columns of the datasets, that we have not analysed yet, may be clustered into three groups: monthly repayment status (from X6 to X11), monthly bills (from X12 to X17) and monthly payments (from X18 to X23). To summarise the information contained there, and also to reduce the number of predictors (hopefully, in a meaningful way), we add three columns to our table **historic**, called *sum_delays*, *billed_tot* and *paid_tot* calculated, respectively, as the sum of the columns from X6 to X11, from X12 to X17 and from X18 to X23.
 \newline
 ```{r mutate}
 historic <- historic %>% mutate(sum_delays = X6 + X7 + X8 + X9 + X10 + X11,
@@ -218,32 +220,31 @@ historic <- historic %>% mutate(sum_delays = X6 + X7 + X8 + X9 + X10 + X11,
 ```
 ## LDA and GamLoess
 
-```{r gam package}
-if (!require(readxl)) install.packages('gam')
-library(gam)
-```
-
-We start (down)loading a necessary package for the next steps. \newline
-We are now ready to test the accuracy of a bunch of models on our predictors. We exclude, from the list of models, the K-nearest neighbors ("knn") Quadratic Discriminant Analysis ("qda"), that have shown not to work on this kind of data, Adaboost, for computational time reasons, and, for the time being, Random Forest. We train the models on personal information, *sum_delays*, *billed_tot* and *paid_tot*, then we show how do they fit.
+We are now ready to test the accuracy of a bunch of models on our predictors. We exclude from the list of models, among the others, the K-nearest neighbors ("knn"), Quadratic Discriminant Analysis ("qda"), that have shown not to work on this kind of data, Adaboost, for computational time reasons, and, for the time being, Random Forest ("rf"). We train the models on personal information, *sum_delays*, *billed_tot* and *paid_tot*, then we show how do they fit.
 \newline
 ```{r models, message = FALSE, warning = FALSE}
-models <- c("glm", "lda", "naive_bayes", "svmLinear", "gamLoess", "multinom")
+models <- c("glm", "lda", "naive_bayes", "svmLinear", "gamLoess")
 fits <- lapply(models, function(model){
-        train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot, method = model, data = historic)})
+               train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot,
+               method = model, data = historic)})
 fits
 ```
-We see that the best models in terms of accuracy and kappa are Linear Discriminant Analysis ("lda") and Generalized Additive Model using LOESS ("gamLoess"): both of them overperform our benchmark accuracy. While the former has no tuning parameters because already construct to maximize the accuracy, the latter can be further improved. We therefore set a range for the parameter 'span' from 0.3 to 0.7 (default is 0.5), while we keep the degree at 1 (default value). We plot the result.
+We see that the best models in terms of accuracy and kappa are Linear Discriminant Analysis ("lda") and Generalized Additive Model using LOESS ("gamLoess"): both of them overperform our benchmark accuracy. While the former has no tuning parameters because already construct to maximize the accuracy, the latter can be further improved. We therefore set a range for the parameter 'span' from 0.2 to 0.6 (default is 0.5), while we keep the degree at 1 (default value). We plot the result.
 \newline
-```{r gamloess tuning}
-gridloess <- expand.grid(span = seq(0.3, 0.7, len = 5), degree = 1)
+```{r gamloess tuning, message = FALSE, warning = FALSE}
+gridloess <- expand.grid(span = seq(0.2, 0.6, len = 5), degree = 1)
 train_gamloess <- train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot,
-                        method = "gamLoess", data = historic, tuneGrid = gridloess)
+                        method = "gamLoess",
+                        data = historic,
+                        tuneGrid = gridloess)
 ggplot(train_gamloess, highlight = TRUE)
 ```
 We also separately train the LDA model.
 \newline
 ```{r LDA train}
-train_lda <- train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot, method = "lda", data = historic)
+train_lda <- train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot,
+                   method = "lda",
+                   data = historic)
 ```
 
 
@@ -251,55 +252,97 @@ train_lda <- train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot, m
 
 While working on the dataset we have discovered that the Random Forest ("rf") and naive Bayes ("naive_bayes") models work pretty well if applied only on the predictor *sum_delays*. We show it here below.
 \newline
-```{r rf and Bayes}
+```{r rf and Bayes, message = FALSE, warning = FALSE}
 models2 <- c("naive_bayes", "rf")
 fits2 <- lapply(models2, function(model){
-        train(Y ~ sum_delays, method = model, data = historic)})
+                train(Y ~ sum_delays,
+                      method = model,
+                      data = historic)})
 fits2
 ```
 
-Both the models contain tuning parameters and we train to master their performances. In the naive Bayes model we keep the parameter 'laplace' equal to 0 and 'usekernel' TRUE, while we make 'adjust' vary from 1 to 5 (10 values). We plot the result.
+Both the models contain tuning parameters and we train them to master their performances. In the naive Bayes model we keep the parameter 'laplace' equal to 0 and 'usekernel' TRUE, while we make 'adjust' vary from 1 to 5 (10 values). We plot the result.
 \newline
 ```{r tuning bayes}
-gridbayes <- expand.grid(laplace = 0, usekernel = TRUE, adjust = seq(1, 5, len = 10))
-train_bayes <- train(Y ~ sum_delays, method = "naive_bayes", data = historic, tuneGrid = gridbayes)
+gridbayes <- expand.grid(laplace = 0,
+                         usekernel = TRUE,
+                         adjust = seq(1, 5, len = 10))
+train_bayes <- train(Y ~ sum_delays,
+                     method = "naive_bayes",
+                     data = historic,
+                     tuneGrid = gridbayes)
 ggplot(train_bayes, highlight = TRUE)
 ```
-We do the same exercise on the Random Forest model. We let the 'mtry' parameter vary from 2 (default) to 150, with 7 values. We also use the argument "nodesize = 1" to allow small sizes to our nodes, in case we have few extreme cases.
+We do the same exercise on the Random Forest model. We let the 'mtry' parameter vary from 2 (default) to 150, with 7 values. We also use the argument 'nodesize' = 1 to allow small sizes to our nodes, in case we have few extreme istances.
 \newline
-```{r tuning rf}
-gridrf <- data.frame(mtry = seq(50, 200, 25))
-train_rf <- train(Y ~ sum_delays, method = "rf", data = historic, nodesize = 1, tuneGrid = gridrf)
+```{r tuning rf, message = FALSE, warning = FALSE}
+gridrf <- data.frame(mtry = seq(2, 150, len = 7))
+train_rf <- train(Y ~ sum_delays,
+                  method = "rf",
+                  data = historic,
+                  nodesize = 1,
+                  tuneGrid = gridrf)
 ggplot(train_rf, highlight = TRUE)
 ```
+
 # Result
 
-Finally we are ready to test the accuracy of our models on the **validation** set. We then predict the outcome for the credit card default using LDA and GamLoess using, as predictors, the personal information, *sum_delays*, *billed_tot* and *paid_tot*, and naive Bayes and Random Forest using the only predictor *sum_delays*. Before the evaluation, we have to create in the validation set the required predictors.
+Finally we are ready to test the accuracy of our models on the **validation** set. We then predict the outcome for the credit card default payments with LDA and GamLoess models using, as predictors, the personal information, *sum_delays*, *billed_tot* and *paid_tot*, and naive Bayes and Random Forest using the only predictor *sum_delays*. Before the evaluation, we have to create in the validation set the required predictors.
 \newline
 ```{r create predictors}
 validation <- validation %>% mutate(sum_delays = X6 + X7 + X8 + X9 + X10 + X11,
-                                billed_tot = X12 + X13 + X14 + X15 + X16 + X17,
-                                paid_tot = X18 + X19 + X20 + X21 + X22 + X23)
+                                    billed_tot = X12 + X13 + X14 + X15 + X16 + X17,
+                                    paid_tot = X18 + X19 + X20 + X21 + X22 + X23)
 ```
 And now we apply the methods, calculating every accuracy.
 \newline
-```{r accuracies}
+```{r accuracies,  message = FALSE, warning = FALSE}
 pred_lda <- predict(train_lda, validation)
 pred_gamloess <- predict(train_gamloess, validation)
 pred_bayes <- predict(train_bayes, validation)
 pred_rf <- predict(train_rf, validation)
-acc_lda <- confusionMatrix(data = pred_lda, reference = validation$Y)$overall["Accuracy"]
-acc_gamloess <- confusionMatrix(data = pred_gamloess, reference = validation$Y)$overall["Accuracy"]
-acc_bayes <- confusionMatrix(data = pred_bayes, reference = validation$Y)$overall["Accuracy"]
-acc_rf <- confusionMatrix(data = pred_rf, reference = validation$Y)$overall["Accuracy"]
+acc_lda <- confusionMatrix(data = pred_lda,
+                           reference = validation$Y)$overall["Accuracy"]
+acc_gamloess <- confusionMatrix(data = pred_gamloess,
+                                reference = validation$Y)$overall["Accuracy"]
+acc_bayes <- confusionMatrix(data = pred_bayes,
+                             reference = validation$Y)$overall["Accuracy"]
+acc_rf <- confusionMatrix(data = pred_rf,
+                          reference = validation$Y)$overall["Accuracy"]
+k_lda <- confusionMatrix(data = pred_lda,
+                           reference = validation$Y)$overall["Kappa"]
+k_gamloess <- confusionMatrix(data = pred_gamloess,
+                                reference = validation$Y)$overall["Kappa"]
+k_bayes <- confusionMatrix(data = pred_bayes,
+                             reference = validation$Y)$overall["Kappa"]
+k_rf <- confusionMatrix(data = pred_rf,
+                          reference = validation$Y)$overall["Kappa"]
 ```
 
 We end up with the following final table.
 \newline
 ```{r final table}
-accuracies <- tibble(method = c("LDA", "GamLoess", "naive Bayes", "Random Forest"),
-                     accuracy = c(acc_lda, acc_gamloess, acc_bayes, acc_rf))
+target <- mean(validation$Y == "0")
+accuracies <- tibble(method = c("target", "LDA", "GamLoess", "naive Bayes", "Random Forest"),
+                     accuracy = c(target, acc_lda, acc_gamloess, acc_bayes, acc_rf),
+                     kappa = c(0, k_lda, k_gamloess, k_bayes, k_rf))
 accuracies %>% knitr::kable()
 ```
 
-#Conclusion
+# Conclusion
+
+Despite the fact that we succeeded in overperforming the target accuracy given by the random chance as well as in achieving non-zero kappas, we have found it very difficult to sensibly improve our model performance. One reason for this is that working on an binary outcome where there is a strong unbalance is more difficult than in the 50-50% case. \newline
+Moreover, despite the fact that we have taken into account basically all the predictors, with the only exclusion of the age, we have struggled in finding a useful way to summarize the information on six-months bill statements (columns from X12 to X17) and six-months payments (columns from X18 to X23). We have tried making the differences between billed and paid amounts in order to get the unpaid amount that could have been an indicator of possible defaults, if high; we have tried to rescale this difference and of the sum of total bills on the maximum limit amount in order to check who reached the limit and many other. Unfortunately, despite they look quite rough, the simple sums that we have reported as *billed_tot* and *paid_tot* were the most effective with our methods. \newline
+Another remark, as with the last two models, trained only on the predictor *sum_delays*, we have reached a similar and even better performance than with the models trained on all the predictors, *sum_delays* has shown a great importance as a summary of the repayment status in the six-months information at our disposal. The table below confirms it, showing the case of Random Forest model, if we had trained it with all the predictors instead of only *sum_delays*.
+\newline
+```{r varimp, message = FALSE, warning = FALSE}
+train_rf2 <- train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot,
+                  method = "rf",
+                  data = historic,
+                  nodesize = 1)
+varImp(train_rf2)
+```
+
+In conclusion, among the possible improvements to this model that does not leave us completely satisfied, we mention possible ensembles techniques, with the models already tested, and, of course, with a somehow better use of the six-months bills and payments data at our disposal.
+
+
