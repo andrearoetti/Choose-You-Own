@@ -68,24 +68,24 @@ credit_card <- credit_card[-1,]
 ```
 
 We now take the *col_description*, which is a tibble, and we transpose it so that it is easier to be shown and read.
-
+\newline
 ```{r description}
 class(col_description)
 t(col_description)
 ```
-We now take the oppoortunity to describe the type of information we have in our dataset. First of all, since our data is taken from Taiwan, every money amount is in New Taiwan Dollars, also abbreviated as NT Dollars or TWD. On average in the last year, the TWD has exchanged against USD with a rate of about 0.032, or about 30 TWD for 1 USD. \newline
+We now take the opportunity to describe the type of information we have in our dataset. First of all, since our data is taken from Taiwan, every money amount is in New Taiwan Dollars, also abbreviated as NT Dollars or TWD. On average in the last year, the TWD has exchanged against USD with a rate of about 0.032, or about 30 TWD for 1 USD. \newline
 
 ## Columns description
 
 * The first column (**X1** or "LIMIT_BAL") represent the maximum limit of each credit card. 
 * The second column (**X2** or "SEX") represents the gender: 1 = male and 2 = female.
-* The Third colimn (**X3** or "EDUCATION") represents the education level: 1 = graduate school, 2 = university, 3 = high school, 4 = others, 5, 6 = uknown.
+* The Third column (**X3** or "EDUCATION") represents the education level: 1 = graduate school, 2 = university, 3 = high school, 4 = others, 5, 6 = unknown.
 * The fourth column (**X4** or "MARRIAGE") represents the marital status: 1 = married, 2 = single, 3 = others.
 * The fifth column (**X5** or "AGE") represents the age in years.
 * From the column **X6** ("PAY_0") to the column **X11** ("PAY_6") we have repayment status from September 2005 back to April 2005 respectively ("PAY_0" is September, "PAY_2" is August, all the way to "PAY_6" that is April): -1 = pay duly, 1 = payment delay for one month, 2 = payment delay for two months, ... 8 = payment delay for 8 months, 9 = payment delay for 9 months or more.
 * From the column **X12** ("BILL_AMT1") to the column **X17** ("BILL_AMT6"), with the same logic we have the amount of bill statements from September 2005, in "BILL_AMT1", all the way to April 2005 ("BILL_AMT6").
 * From the column **X18** ("PAY_AMT1") to the column **X23** ("PAY_AMT6"), again with the same logic, we have the amounts of previous payment from September 2005, in "PAY_AMT1",all the way to April 2005 ("PAY_AMT6").
-* Fianlly, in the last column (**Y** or 'default payment next month') we have the outcome 1 in case of default, 0 otherwise.
+* Finally, in the last column (**Y** or 'default payment next month') we have the outcome 1 in case of default, 0 otherwise.
 
 ## Data tidying and partitioning
 
@@ -99,14 +99,14 @@ credit_card$X4 <- as.factor(credit_card$X4)
 credit_card$Y <- as.factor(credit_card$Y)
 ```
 
-The ultimate goal of this project is to predict, on an uknown dataset, the outcome of column Y given all the Xs. To do this, we split our dataset into two parts: one, called *historic* will be treated as historic series of data at our disposition, where we will do our data analysis and build our model. The second one, called *validation*, will be treated as unknown and only used to evaluate the performance of our final model. The proportion choosen is 80-20% in order to have enough data to build and train our model but also a consistent dataset for evaluating it. \newline
+The ultimate goal of this project is to predict, on an unknown dataset, the outcome of column Y given all the Xs. To do this, we split our dataset into two parts: one, called *historic* will be treated as historic series of data at our disposition, where we will do our data analysis and build our model. The second one, called *validation*, will be treated as unknown and only used to evaluate the performance of our final model. The proportion chosen is 80-20% in order to have enough data to build and train our model but also a consistent dataset for evaluating it. \newline
 To permit the replica of our work, we set the seed before creating the index.
 \newline
 ```{r historic/validation, message = FALSE, warning = FALSE}
 set.seed(1, sample.kind = "Rounding")
-test_index <- createDataPartition(y = credit_card$Y, times = 1,p = 0.2, list = FALSE)
-historic <- credit_card[-test_index,]
-validation <- credit_card[test_index,]
+validation_index <- createDataPartition(y = credit_card$Y, times = 1,p = 0.2, list = FALSE)
+historic <- credit_card[-validation_index,]
+validation <- credit_card[validation_index,]
 ```
 
 # Exploratory data analysis
@@ -132,8 +132,8 @@ We first check how the default payments are divided by gender and we do it with 
 ```{r gender plot, message = FALSE, warning = FALSE, echo = FALSE}
 historic %>% group_by(X2,Y) %>% summarize(n = n()) %>% ggplot() + geom_col(aes(X2,n, fill = Y))
 ```
-It looks like the default payments for male (X2 = 1) are, on percentage, slighlty higher than for females (X2 = 2), despite the fact that in absolute numbers they are a bit less. The below table confirms our suspect.
-
+It looks like the default payments for male (X2 = 1) are, on percentage, slightly higher than for females (X2 = 2), despite the fact that in absolute numbers they are a bit less. The below table confirms our suspect.
+\newline
 ```{r rate by gender, message = FALSE, warning = FALSE}
 historic %>% group_by(X2) %>% summarize(rate = mean(Y == "1"), n = n())
 ```
@@ -156,11 +156,11 @@ From this table it appears more clearly that actually, among the three main cate
 ## Marital status
 
 As done previously, we try to understand if also the marriage status may impact the default payments rate.
-
+\newline
 ```{r marriage status plot, message = FALSE, warning = FALSE, echo = FALSE}
 historic %>% group_by(X4,Y) %>% summarize(n = n()) %>% ggplot() + geom_col(aes(X4,n, fill = Y))
 ```
-Similarily to the gender situation, it appears that in case an individual is married (X4 = 1), the default rate is slightly higher than in the case she/he is single (X4 = 2), despite the fact in our dataset we have overall more cases of defaults pertaining to singles. We confirm our guess with the table below.
+Similarly to the gender situation, it appears that in case an individual is married (X4 = 1), the default rate is slightly higher than in the case she/he is single (X4 = 2), despite the fact in our dataset we have overall more cases of defaults pertaining to singles. We confirm our guess with the table below.
 \newline
 ```{r rate by marriage status, message = FALSE, warning = FALSE}
 historic %>% group_by(X4) %>% summarize(rate = mean(Y == "1"), n = n())
@@ -169,7 +169,7 @@ Other marriage status do not appear to be statistically relevant due to the low 
 
 ## Age
 
-To understand whether age has an impact on default rate or not we check if the age distribution functions for the two possible outcomes we want to predict (Y = 1 or 0) have shapes centered at different ages or follow different paths. We make use of a smooth line since age is not a factor as gender, marital status or education level. Here below the graph.
+To understand whether age has an impact on default rate or not we check if the age distribution functions for the two possible outcomes we want to predict (Y = 1 or 0) have shapes centred at different ages or follow different paths. We make use of a smooth line since age is not a factor as gender, marital status or education level. Here below the graph.
 \newline
 ```{r Age plot, message = FALSE, warning = FALSE, echo = FALSE}
 historic %>% group_by(X5,Y) %>% summarize(n = n()) %>% ggplot(aes(X5, n, color = Y)) + geom_smooth(span = 0.4) + geom_point()
@@ -181,7 +181,7 @@ From this plot it looks like the two curves follow a similar proportional path w
 historic %>% group_by(Y) %>% summarize(rate = mean(X5), n = n())
 ```
 
-In our kind of Bayesan analysis it apperas that, given the default or not, does not really help in understanding the age of the individual on average, like saying that a youger age does not mean a higher risk and vice-versa.
+In our kind of Bayesan analysis it appears that, given the default or not, does not really help in understanding the age of the individual on average, like saying that a younger age does not mean a higher risk and vice-versa. We will therefore not use this predictor any further.
 
 ## Credit card limit
 
@@ -195,6 +195,111 @@ This time it looks like for smaller limits we have higher percentages of default
 ```{r rate by limit, message = FALSE, warning = FALSE}
 historic %>% group_by(Y) %>% summarize(rate = mean(X1), n = n())
 ```
-The table confirms our intuition, since the average limit for default cases is lower. This indicates that, perhaps, who asks for an increase in her/his limit, has actually a even higher economic power than what conceded.
+The table confirms our intuition, since the average limit for default cases is lower. This indicates that, perhaps, who asks for an increase in her/his limit, has actually an even higher economic power than what conceded.
 
 # Model
+
+We are now ready to build our model. We will exploit easiness of use of the caret package in order to apply different models to our predictors and then we will choose the best performing ones. Since every model will calculate its accuracy by performing cross-validation on bootstrap samples, we do not need to further split our historical dataset into train and test sets. We will tune, instead, the chosen models in case they had tuning parameters. \newline
+Since our categorical outcome (0 or 1 for credit card default, column Y) is unbalanced and contains a majority of non-defaults (Y = 0), the benchmark result required to be overperformed is the accuracy rate given by all predictions equal to zero. We keep track of it in a table.
+\newline
+```{r benchmark}
+zeros <- sample(0, nrow(historic), replace = TRUE, prob = 1)
+benchmark <- mean(zeros == historic$Y)
+benchmark
+```
+In this sense, the 'Kappa' parameter of every model will be fundamental, being a parameter normalized on the expected accuracy, namely the random chance. It measure how many prediction we are getting correct on top of randomness: of course, the higher, the better. \newline
+In the previous chapter we have analysed some possible and curious relations between personal information such as gender or marital status and the probability of default payments. From now on, to make it simple, we will call the information we have previously decided to include in our model (gender, education level, marital status and also credit card limit, with the only exclusion of the age) personal information. \newline
+We notice that the remaining columns of the datasets that we have not analysed yet, may be clustered into three groups: monthly repayment status (from X6 to X11), monthly bills (from X12 to X17) and monthly payments (from X18 to X23). To summarise the information contained there, and also to reduce the number of predictors (hopefully, in a meaningful way), we add three columns to our table **historic**, called *sum_delays*, *billed_tot* and *paid_tot* calculated, respectively, as the sum of the columns from X6 to X11, from X12 to X17 and from X18 to X23.
+\newline
+```{r mutate}
+historic <- historic %>% mutate(sum_delays = X6 + X7 + X8 + X9 + X10 + X11,
+                                billed_tot = X12 + X13 + X14 + X15 + X16 + X17,
+                                paid_tot = X18 + X19 + X20 + X21 + X22 + X23)
+```
+## LDA and GamLoess
+
+```{r gam package}
+if (!require(readxl)) install.packages('gam')
+library(gam)
+```
+
+We start (down)loading a necessary package for the next steps. \newline
+We are now ready to test the accuracy of a bunch of models on our predictors. We exclude, from the list of models, the K-nearest neighbors ("knn") Quadratic Discriminant Analysis ("qda"), that have shown not to work on this kind of data, Adaboost, for computational time reasons, and, for the time being, Random Forest. We train the models on personal information, *sum_delays*, *billed_tot* and *paid_tot*, then we show how do they fit.
+\newline
+```{r models, message = FALSE, warning = FALSE}
+models <- c("glm", "lda", "naive_bayes", "svmLinear", "gamLoess", "multinom")
+fits <- lapply(models, function(model){
+        train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot, method = model, data = historic)})
+fits
+```
+We see that the best models in terms of accuracy and kappa are Linear Discriminant Analysis ("lda") and Generalized Additive Model using LOESS ("gamLoess"): both of them overperform our benchmark accuracy. While the former has no tuning parameters because already construct to maximize the accuracy, the latter can be further improved. We therefore set a range for the parameter 'span' from 0.3 to 0.7 (default is 0.5), while we keep the degree at 1 (default value). We plot the result.
+\newline
+```{r gamloess tuning}
+gridloess <- expand.grid(span = seq(0.3, 0.7, len = 5), degree = 1)
+train_gamloess <- train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot,
+                        method = "gamLoess", data = historic, tuneGrid = gridloess)
+ggplot(train_gamloess, highlight = TRUE)
+```
+We also separately train the LDA model.
+\newline
+```{r LDA train}
+train_lda <- train(Y ~ X1 + X2 + X3 + X4 + sum_delays + billed_tot + paid_tot, method = "lda", data = historic)
+```
+
+
+## Random Forest and naive Bayes
+
+While working on the dataset we have discovered that the Random Forest ("rf") and naive Bayes ("naive_bayes") models work pretty well if applied only on the predictor *sum_delays*. We show it here below.
+\newline
+```{r rf and Bayes}
+models2 <- c("naive_bayes", "rf")
+fits2 <- lapply(models2, function(model){
+        train(Y ~ sum_delays, method = model, data = historic)})
+fits2
+```
+
+Both the models contain tuning parameters and we train to master their performances. In the naive Bayes model we keep the parameter 'laplace' equal to 0 and 'usekernel' TRUE, while we make 'adjust' vary from 1 to 5 (10 values). We plot the result.
+\newline
+```{r tuning bayes}
+gridbayes <- expand.grid(laplace = 0, usekernel = TRUE, adjust = seq(1, 5, len = 10))
+train_bayes <- train(Y ~ sum_delays, method = "naive_bayes", data = historic, tuneGrid = gridbayes)
+ggplot(train_bayes, highlight = TRUE)
+```
+We do the same exercise on the Random Forest model. We let the 'mtry' parameter vary from 2 (default) to 150, with 7 values. We also use the argument "nodesize = 1" to allow small sizes to our nodes, in case we have few extreme cases.
+\newline
+```{r tuning rf}
+gridrf <- data.frame(mtry = seq(50, 200, 25))
+train_rf <- train(Y ~ sum_delays, method = "rf", data = historic, nodesize = 1, tuneGrid = gridrf)
+ggplot(train_rf, highlight = TRUE)
+```
+# Result
+
+Finally we are ready to test the accuracy of our models on the **validation** set. We then predict the outcome for the credit card default using LDA and GamLoess using, as predictors, the personal information, *sum_delays*, *billed_tot* and *paid_tot*, and naive Bayes and Random Forest using the only predictor *sum_delays*. Before the evaluation, we have to create in the validation set the required predictors.
+\newline
+```{r create predictors}
+validation <- validation %>% mutate(sum_delays = X6 + X7 + X8 + X9 + X10 + X11,
+                                billed_tot = X12 + X13 + X14 + X15 + X16 + X17,
+                                paid_tot = X18 + X19 + X20 + X21 + X22 + X23)
+```
+And now we apply the methods, calculating every accuracy.
+\newline
+```{r accuracies}
+pred_lda <- predict(train_lda, validation)
+pred_gamloess <- predict(train_gamloess, validation)
+pred_bayes <- predict(train_bayes, validation)
+pred_rf <- predict(train_rf, validation)
+acc_lda <- confusionMatrix(data = pred_lda, reference = validation$Y)$overall["Accuracy"]
+acc_gamloess <- confusionMatrix(data = pred_gamloess, reference = validation$Y)$overall["Accuracy"]
+acc_bayes <- confusionMatrix(data = pred_bayes, reference = validation$Y)$overall["Accuracy"]
+acc_rf <- confusionMatrix(data = pred_rf, reference = validation$Y)$overall["Accuracy"]
+```
+
+We end up with the following final table.
+\newline
+```{r final table}
+accuracies <- tibble(method = c("LDA", "GamLoess", "naive Bayes", "Random Forest"),
+                     accuracy = c(acc_lda, acc_gamloess, acc_bayes, acc_rf))
+accuracies %>% knitr::kable()
+```
+
+#Conclusion
